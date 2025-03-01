@@ -43,7 +43,7 @@ function create_elearning_modules_table() {
         module_title VARCHAR(255) NOT NULL,
         module_introtext TEXT NOT NULL,
         module_thumbnail VARCHAR(255) DEFAULT NULL,
-        module_video VARCHAR(255) DEFAULT NULL,
+        module_video_iframe TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id)
     ) $charset_collate;";
@@ -70,13 +70,18 @@ function elearning_admin_menu() {
 add_action('admin_menu', 'elearning_admin_menu');
 
 
-// Admin Page Callback
+// Admin Page Callback with success or error message
 function elearning_admin_page() {
     ?>
     <div class="wrap">
-        <h1>Add New E-Learning Module</h1>
+        <h1>E-Learning Modules</h1>
+
         <?php if (isset($_GET['success'])): ?>
             <div class="notice notice-success"><p>Module saved successfully!</p></div>
+        <?php elseif (isset($_GET['deleted']) && $_GET['deleted'] == 'true'): ?>
+            <div class="notice notice-success"><p>Module deleted successfully!</p></div>
+        <?php elseif (isset($_GET['deleted']) && $_GET['deleted'] == 'false'): ?>
+            <div class="notice notice-error"><p>Failed to delete module.</p></div>
         <?php endif; ?>
 
         <form method="post" enctype="multipart/form-data" style="display: flex; flex-direction: column;">
@@ -94,19 +99,20 @@ function elearning_admin_page() {
             <label for="module_thumbnail">Module Thumbnail:</label>
             <input type="file" id="module_thumbnail" name="module_thumbnail">
 
-            <label for="module_video">Module Video Link:</label>
-            <input type="text" id="module_video" name="module_video" required>
+            <label for="module_video_iframe">Module Video iFrame:</label>
+            <input type="text" id="module_video_iframe" name="module_video_iframe" required>
 
             <input type="submit" name="submit_module" value="Save Module" class="button button-primary" style="width: 250px; margin-bottom: 40px;">
         </form>
 
         <?php
-            // Display the modules table
-            display_elearning_modules();
+        // Display the modules table
+        display_elearning_modules();
         ?>
     </div>
     <?php
 }
+
 
 // Display existing modules from the custom table
 function display_elearning_modules() {
@@ -118,15 +124,15 @@ function display_elearning_modules() {
 
     if ($modules) {
         echo '<table class="widefat fixe">';
-        echo '<thead><tr><th>Module Number</th><th>Title</th><th>Intro Text</th><th>Video Link</th><th>Actions</th></tr></thead>';
+        echo '<thead><tr><th>Module Number</th><th>Title</th><th>Intro Text</th><th>Actions</th></tr></thead>';
         echo '<tbody>';
         foreach ($modules as $module) {
+            $delete_url = wp_nonce_url(admin_url('admin.php?page=elearning-modules&delete_module=' . $module->id), 'delete_elearning_module');
             echo '<tr>';
             echo '<td>' . esc_html($module->module_number) . '</td>';
             echo '<td>' . esc_html($module->module_title) . '</td>';
             echo '<td>' . esc_html($module->module_introtext) . '</td>';
-            echo '<td><a href="' . esc_url($module->module_video) . '" target="_blank">Video</a></td>';
-            echo '<td><a href="#">Edit</a> | <a href="#">Delete</a></td>';
+            echo '<td><a href="#">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
             echo '</tr>';
         }
         echo '</tbody>';
@@ -144,7 +150,24 @@ function save_elearning_module() {
         $module_number = sanitize_text_field($_POST['module_number']);
         $module_title = sanitize_text_field($_POST['module_title']);
         $module_introtext = sanitize_textarea_field($_POST['module_introtext']);
-        $module_video = esc_url($_POST['module_video']);
+        $allowed_html = array(
+            'iframe' => array(
+                'id'                  => array(),
+                'width'               => array(),
+                'height'              => array(),
+                'src'                 => array(),
+                'class'               => array(),
+                'allowfullscreen'     => array(),
+                'webkitallowfullscreen' => array(),
+                'mozallowfullscreen'  => array(),
+                'allow'               => array(),
+                'referrerpolicy'      => array(),
+                'sandbox'             => array(),
+                'frameborder'         => array(),
+                'title'               => array(),
+            ),
+        );
+        $module_video_iframe = wp_kses($_POST['module_video_iframe'], $allowed_html);
 
         // Handle the thumbnail upload (if applicable)
         $thumbnail_id = null;
@@ -170,7 +193,7 @@ function save_elearning_module() {
                 'module_number'   => $module_number,
                 'module_title'    => $module_title,
                 'module_introtext' => $module_introtext,
-                'module_video'     => $module_video,
+                'module_video_iframe'     => $module_video_iframe,
                 'module_thumbnail' => $thumbnail_id, // Store the thumbnail attachment ID
                 'created_at'       => current_time('mysql'), // Store the current date/time
             ),
@@ -178,7 +201,7 @@ function save_elearning_module() {
                 '%s', // module_number
                 '%s', // module_title
                 '%s', // module_introtext
-                '%s', // module_video
+                '%s', // module_video_iframe
                 '%d', // module_thumbnail (ID)
                 '%s'  // created_at (datetime)
             )
@@ -211,7 +234,7 @@ function delete_elearning_module() {
             $table_name = $wpdb->prefix . 'e_learning_modules';
 
             // Delete the module from the custom table
-            $deleted = $wpdb->delete($table_name, array('ID' => $module_id), array('%d'));
+            $deleted = $wpdb->delete($table_name, array('id' => $module_id), array('%d'));
 
             if ($deleted) {
                 // Redirect to the module list with a success message
@@ -226,3 +249,4 @@ function delete_elearning_module() {
     }
 }
 add_action('admin_init', 'delete_elearning_module');
+
