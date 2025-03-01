@@ -14,6 +14,8 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
+
+/* +++++++++++++++++++++++++++++++++++++++++++++++++++ Set Up +++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 // Plugin activation hook
 function wp_e_learning_activate() {
     flush_rewrite_rules();
@@ -55,6 +57,8 @@ function create_elearning_modules_table() {
 register_activation_hook(__FILE__, 'create_elearning_modules_table');
 
 
+
+/* ++++++++++++++++++++++++++++++++++++++++++++++++++ Main Page +++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 // Add a custom admin menu for the E-Learning Module
 function elearning_admin_menu() {
     add_menu_page(
@@ -117,22 +121,22 @@ function elearning_admin_page() {
 // Display existing modules from the custom table
 function display_elearning_modules() {
     global $wpdb;
-
-    // Query the custom table for the saved modules
     $table_name = $wpdb->prefix . 'e_learning_modules';
     $modules = $wpdb->get_results("SELECT * FROM $table_name ORDER BY created_at DESC");
 
     if ($modules) {
-        echo '<table class="widefat fixe">';
+        echo '<table class="widefat fixed">';
         echo '<thead><tr><th>Module Number</th><th>Title</th><th>Intro Text</th><th>Actions</th></tr></thead>';
         echo '<tbody>';
         foreach ($modules as $module) {
+            $edit_url = admin_url('admin.php?page=edit-elearning-module&module_id=' . $module->id);
             $delete_url = wp_nonce_url(admin_url('admin.php?page=elearning-modules&delete_module=' . $module->id), 'delete_elearning_module');
+
             echo '<tr>';
             echo '<td>' . esc_html($module->module_number) . '</td>';
             echo '<td>' . esc_html($module->module_title) . '</td>';
             echo '<td>' . esc_html($module->module_introtext) . '</td>';
-            echo '<td><a href="#">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
+            echo '<td><a href="' . esc_url($edit_url) . '">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
             echo '</tr>';
         }
         echo '</tbody>';
@@ -141,6 +145,7 @@ function display_elearning_modules() {
         echo '<p>No modules found.</p>';
     }
 }
+
 
 
 
@@ -249,4 +254,159 @@ function delete_elearning_module() {
     }
 }
 add_action('admin_init', 'delete_elearning_module');
+
+
+
+/* ++++++++++++++++++++++++++++++++++++++++++++++++++ Edit Page +++++++++++++++++++++++++++++++++++++++++++++++++++++ */
+// Register the admin menu page for editing
+function elearning_admin_edit_menu() {
+    add_submenu_page(
+        null, // Hidden menu
+        'Edit E-Learning Module',
+        'Edit Module',
+        'manage_options',
+        'edit-elearning-module',
+        'elearning_edit_module_page'
+    );
+}
+add_action('admin_menu', 'elearning_admin_edit_menu');
+
+function elearning_edit_module_page() {
+    if (!isset($_GET['module_id']) || !is_numeric($_GET['module_id'])) {
+        echo '<div class="notice notice-error"><p>Invalid module ID.</p></div>';
+        return;
+    }
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'e_learning_modules';
+    $module_id = intval($_GET['module_id']);
+    $module = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $module_id));
+
+    if (!$module) {
+        echo '<div class="notice notice-error"><p>Module not found.</p></div>';
+        return;
+    }
+
+    // Get the current thumbnail URL
+    $current_thumbnail = !empty($module->module_thumbnail) ? wp_get_attachment_url($module->module_thumbnail) : '';
+
+    ?>
+    <div class="wrap">
+        <h1>Edit E-Learning Module</h1>
+
+        <?php if (isset($_GET['updated']) && $_GET['updated'] == 'true'): ?>
+            <div class="notice notice-success"><p>Module updated successfully!</p></div>
+        <?php elseif (isset($_GET['updated']) && $_GET['updated'] == 'false'): ?>
+            <div class="notice notice-error"><p>Failed to update module.</p></div>
+        <?php endif; ?>
+
+        <form method="post" enctype="multipart/form-data" style="display: flex; flex-direction: column;">
+            <?php wp_nonce_field('update_elearning_module', 'elearning_nonce'); ?>
+
+            <input type="hidden" name="module_id" value="<?php echo esc_attr($module->id); ?>">
+
+            <label for="module_number">Module Number:</label>
+            <input type="text" id="module_number" name="module_number" value="<?php echo esc_attr($module->module_number); ?>" required>
+
+            <label for="module_title">Module Title:</label>
+            <input type="text" id="module_title" name="module_title" value="<?php echo esc_attr($module->module_title); ?>" required>
+
+            <label for="module_introtext">Module Introtext:</label>
+            <textarea id="module_introtext" name="module_introtext" required><?php echo esc_textarea($module->module_introtext); ?></textarea>
+
+            <label for="module_video_iframe">Module Video iFrame:</label>
+            <input type="text" id="module_video_iframe" name="module_video_iframe" value="<?php echo esc_attr($module->module_video_iframe); ?>" required>
+
+            <label for="module_thumbnail">Module Thumbnail:</label>
+            <?php if ($current_thumbnail): ?>
+                <div>
+                    <img src="<?php echo esc_url($current_thumbnail); ?>" alt="Current Thumbnail" style="max-width: 200px; height: auto; margin-bottom: 10px;">
+                </div>
+            <?php endif; ?>
+            <input type="file" id="module_thumbnail" name="module_thumbnail">
+
+            <input type="submit" name="update_module" value="Save Changes" class="button button-primary" style="width: 250px; margin-bottom: 40px;>
+        </form>
+    </div>
+    <?php
+}
+
+function update_elearning_module() {
+    if (isset($_POST['update_module']) && check_admin_referer('update_elearning_module', 'elearning_nonce')) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'e_learning_modules';
+
+        $module_id = intval($_POST['module_id']);
+        $module_number = sanitize_text_field($_POST['module_number']);
+        $module_title = sanitize_text_field($_POST['module_title']);
+        $module_introtext = sanitize_textarea_field($_POST['module_introtext']);
+
+        $allowed_html = array(
+            'iframe' => array(
+                'id'                  => array(),
+                'width'               => array(),
+                'height'              => array(),
+                'src'                 => array(),
+                'class'               => array(),
+                'allowfullscreen'     => array(),
+                'webkitallowfullscreen' => array(),
+                'mozallowfullscreen'  => array(),
+                'allow'               => array(),
+                'referrerpolicy'      => array(),
+                'sandbox'             => array(),
+                'frameborder'         => array(),
+                'title'               => array(),
+            ),
+        );
+        $module_video_iframe = wp_kses($_POST['module_video_iframe'], $allowed_html);
+
+        // Get current module data (to check old thumbnail)
+        $module = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $module_id));
+        $old_thumbnail_id = $module->module_thumbnail;
+
+        // Handle the new thumbnail upload (if applicable)
+        $new_thumbnail_id = $old_thumbnail_id; // Keep the old one by default
+
+        if (!empty($_FILES['module_thumbnail']['name'])) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+            require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+            // Upload the new image
+            $attachment_id = media_handle_upload('module_thumbnail', 0);
+            if (!is_wp_error($attachment_id)) {
+                $new_thumbnail_id = $attachment_id;
+
+                // If the old thumbnail exists, delete it
+                if ($old_thumbnail_id) {
+                    wp_delete_attachment($old_thumbnail_id, true);
+                }
+            }
+        }
+
+        // Update the module in the database
+        $updated = $wpdb->update(
+            $table_name,
+            array(
+                'module_number'   => $module_number,
+                'module_title'    => $module_title,
+                'module_introtext' => $module_introtext,
+                'module_video_iframe' => $module_video_iframe,
+                'module_thumbnail' => $new_thumbnail_id,
+            ),
+            array('id' => $module_id),
+            array('%s', '%s', '%s', '%s', '%d'),
+            array('%d')
+        );
+
+        if ($updated !== false) {
+            wp_redirect(admin_url('admin.php?page=edit-elearning-module&module_id=' . $module_id . '&updated=true'));
+            exit;
+        } else {
+            wp_redirect(admin_url('admin.php?page=edit-elearning-module&module_id=' . $module_id . '&updated=false'));
+            exit;
+        }
+    }
+}
+add_action('admin_init', 'update_elearning_module');
 
