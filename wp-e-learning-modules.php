@@ -28,7 +28,6 @@ function wp_e_learning_deactivate() {
 }
 register_deactivation_hook(__FILE__, 'wp_e_learning_deactivate');
 
-
 // Create the custom table when the plugin is activated
 function create_elearning_modules_table() {
     global $wpdb;
@@ -104,7 +103,10 @@ function elearning_admin_page() {
             <input type="file" id="module_thumbnail" name="module_thumbnail">
 
             <label for="module_video_iframe">Module Video iFrame:</label>
-            <input type="text" id="module_video_iframe" name="module_video_iframe" required>
+            <div id="video_iframe_fields">
+                <input type="text" name="module_video_iframe[]" required>
+            </div>
+            <button type="button" id="add_video">Add Video</button>
 
             <input type="submit" name="submit_module" value="Save Module" class="button button-primary" style="width: 250px; margin-bottom: 40px;">
         </form>
@@ -114,9 +116,17 @@ function elearning_admin_page() {
         display_elearning_modules();
         ?>
     </div>
+    <script>
+        document.getElementById('add_video').addEventListener('click', function() {
+            var newInput = document.createElement('input');
+            newInput.type = 'text';
+            newInput.name = 'module_video_iframe[]';
+            newInput.required = true;
+            document.getElementById('video_iframe_fields').appendChild(newInput);
+        });
+    </script>
     <?php
 }
-
 
 // Display existing modules from the custom table
 function display_elearning_modules() {
@@ -146,9 +156,6 @@ function display_elearning_modules() {
     }
 }
 
-
-
-
 function save_elearning_module() {
     if (isset($_POST['submit_module']) && check_admin_referer('save_elearning_module', 'elearning_nonce')) {
         // Sanitize input data
@@ -172,7 +179,9 @@ function save_elearning_module() {
                 'title'               => array(),
             ),
         );
-        $module_video_iframe = wp_kses($_POST['module_video_iframe'], $allowed_html);
+        $module_video_iframes = array_map(function($iframe) use ($allowed_html) {
+            return wp_kses($iframe, $allowed_html);
+        }, $_POST['module_video_iframe']);
 
         // Handle the thumbnail upload (if applicable)
         $thumbnail_id = null;
@@ -198,7 +207,7 @@ function save_elearning_module() {
                 'module_number'   => $module_number,
                 'module_title'    => $module_title,
                 'module_introtext' => $module_introtext,
-                'module_video_iframe'     => $module_video_iframe,
+                'module_video_iframe'     => serialize($module_video_iframes), // Save array as serialized string
                 'module_thumbnail' => $thumbnail_id, // Store the thumbnail attachment ID
                 'created_at'       => current_time('mysql'), // Store the current date/time
             ),
@@ -206,7 +215,7 @@ function save_elearning_module() {
                 '%s', // module_number
                 '%s', // module_title
                 '%s', // module_introtext
-                '%s', // module_video_iframe
+                '%s', // module_video_iframe (serialized)
                 '%d', // module_thumbnail (ID)
                 '%s'  // created_at (datetime)
             )
@@ -225,7 +234,6 @@ function save_elearning_module() {
     }
 }
 add_action('admin_init', 'save_elearning_module');
-
 
 function delete_elearning_module() {
     // Check if 'delete_module' is set and the nonce is valid
@@ -254,8 +262,6 @@ function delete_elearning_module() {
     }
 }
 add_action('admin_init', 'delete_elearning_module');
-
-
 
 /* ++++++++++++++++++++++++++++++++++++++++++++++++++ Edit Page +++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 // Register the admin menu page for editing
@@ -289,6 +295,7 @@ function elearning_edit_module_page() {
 
     // Get the current thumbnail URL
     $current_thumbnail = !empty($module->module_thumbnail) ? wp_get_attachment_url($module->module_thumbnail) : '';
+    $module_video_iframes = unserialize($module->module_video_iframe);  // Unserialize the video iframes
 
     ?>
     <div class="wrap">
@@ -315,7 +322,15 @@ function elearning_edit_module_page() {
             <textarea id="module_introtext" name="module_introtext" required><?php echo esc_textarea($module->module_introtext); ?></textarea>
 
             <label for="module_video_iframe">Module Video iFrame:</label>
-            <input type="text" id="module_video_iframe" name="module_video_iframe" value="<?php echo esc_attr($module->module_video_iframe); ?>" required>
+            <div id="video_iframe_fields">
+                <?php foreach ($module_video_iframes as $iframe): ?>
+                    <div class="iframe-field">
+                        <input type="text" name="module_video_iframe[]" value="<?php echo esc_attr($iframe); ?>" required>
+                        <button type="button" class="remove-iframe">Delete</button>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" id="add_video">Add Video</button>
 
             <label for="module_thumbnail">Module Thumbnail:</label>
             <?php if ($current_thumbnail): ?>
@@ -325,11 +340,31 @@ function elearning_edit_module_page() {
             <?php endif; ?>
             <input type="file" id="module_thumbnail" name="module_thumbnail">
 
-            <input type="submit" name="update_module" value="Save Changes" class="button button-primary" style="width: 250px; margin-bottom: 40px;>
+            <input type="submit" name="update_module" value="Save Changes" class="button button-primary" style="width: 250px; margin-bottom: 40px;">
         </form>
     </div>
+    <script>
+        // Add a new video input field
+        document.getElementById('add_video').addEventListener('click', function() {
+            var newDiv = document.createElement('div');
+            newDiv.classList.add('iframe-field');
+            newDiv.innerHTML = '<input type="text" name="module_video_iframe[]" required> <button type="button" class="remove-iframe">Delete</button>';
+            document.getElementById('video_iframe_fields').appendChild(newDiv);
+        });
+
+        // Remove a video input field when the "Delete" button is clicked
+        document.getElementById('video_iframe_fields').addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('remove-iframe')) {
+                var iframeField = e.target.closest('.iframe-field');
+                iframeField.remove();
+            }
+        });
+    </script>
     <?php
 }
+
+
+
 
 function update_elearning_module() {
     if (isset($_POST['update_module']) && check_admin_referer('update_elearning_module', 'elearning_nonce')) {
@@ -358,48 +393,40 @@ function update_elearning_module() {
                 'title'               => array(),
             ),
         );
-        $module_video_iframe = wp_kses($_POST['module_video_iframe'], $allowed_html);
+        $module_video_iframes = array_map(function($iframe) use ($allowed_html) {
+            return wp_kses($iframe, $allowed_html);
+        }, $_POST['module_video_iframe']);
 
-        // Get current module data (to check old thumbnail)
-        $module = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $module_id));
-        $old_thumbnail_id = $module->module_thumbnail;
-
-        // Handle the new thumbnail upload (if applicable)
-        $new_thumbnail_id = $old_thumbnail_id; // Keep the old one by default
-
+        // Handle the thumbnail upload (if applicable)
+        $thumbnail_id = null;
         if (!empty($_FILES['module_thumbnail']['name'])) {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
             require_once(ABSPATH . 'wp-admin/includes/image.php');
             require_once(ABSPATH . 'wp-admin/includes/media.php');
 
-            // Upload the new image
-            $attachment_id = media_handle_upload('module_thumbnail', 0);
+            $attachment_id = media_handle_upload('module_thumbnail', 0); // No need to associate it with a post
             if (!is_wp_error($attachment_id)) {
-                $new_thumbnail_id = $attachment_id;
-
-                // If the old thumbnail exists, delete it
-                if ($old_thumbnail_id) {
-                    wp_delete_attachment($old_thumbnail_id, true);
-                }
+                $thumbnail_id = $attachment_id; // Save attachment ID for the thumbnail
             }
         }
 
-        // Update the module in the database
-        $updated = $wpdb->update(
+        // Update the module in the custom table
+        $result = $wpdb->update(
             $table_name,
             array(
                 'module_number'   => $module_number,
                 'module_title'    => $module_title,
                 'module_introtext' => $module_introtext,
-                'module_video_iframe' => $module_video_iframe,
-                'module_thumbnail' => $new_thumbnail_id,
+                'module_video_iframe'     => serialize($module_video_iframes), // Save array as serialized string
+                'module_thumbnail' => $thumbnail_id, // Store the thumbnail attachment ID
             ),
             array('id' => $module_id),
             array('%s', '%s', '%s', '%s', '%d'),
-            array('%d')
+            array('%d')  // Where clause
         );
 
-        if ($updated !== false) {
+        // Check if the update was successful
+        if ($result !== false) {
             wp_redirect(admin_url('admin.php?page=edit-elearning-module&module_id=' . $module_id . '&updated=true'));
             exit;
         } else {
@@ -409,4 +436,3 @@ function update_elearning_module() {
     }
 }
 add_action('admin_init', 'update_elearning_module');
-
