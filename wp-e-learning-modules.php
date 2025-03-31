@@ -72,9 +72,13 @@ function elearning_admin_menu() {
 }
 add_action('admin_menu', 'elearning_admin_menu');
 
+$textarea_default_content = '<h3>Titel</h3>
+<p>Paragraph</p>'
+;
 
 // Admin Page Callback with success or error message
 function elearning_admin_page() {
+    global $textarea_default_content;
     ?>
     <div class="wrap">
         <h1>E-Learning Modules</h1>
@@ -102,11 +106,13 @@ function elearning_admin_page() {
             <label for="module_thumbnail">Module Thumbnail:</label>
             <input type="file" id="module_thumbnail" name="module_thumbnail">
 
-            <label for="module_video_iframe">Module Video iFrame:</label>
-            <div id="video_iframe_fields">
-                <input type="text" name="module_video_iframe[]" required>
+            <label for="module_video_iframe">Module Elements:</label>
+            <div id="video_iframe_fields" style="display: flex; flex-direction: column;">
+                <div class="iframe-field" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <textarea name="module_video_iframe[]" style="width: 100%" required><?php echo $textarea_default_content; ?></textarea>
+                </div>
             </div>
-            <button type="button" id="add_video">Add Video</button>
+            <button type="button" id="add_video" style="width: 150px; margin-bottom: 20px;">Add Element</button>
 
             <input type="submit" name="submit_module" value="Save Module" class="button button-primary" style="width: 250px; margin-bottom: 40px;">
         </form>
@@ -118,15 +124,41 @@ function elearning_admin_page() {
     </div>
     <script>
         document.getElementById('add_video').addEventListener('click', function() {
-            var newInput = document.createElement('input');
-            newInput.type = 'text';
-            newInput.name = 'module_video_iframe[]';
-            newInput.required = true;
-            document.getElementById('video_iframe_fields').appendChild(newInput);
+            var container = document.createElement('div');
+            container.className = 'iframe-field';
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.gap = '10px';
+            container.style.marginBottom = '10px';
+
+            var newTextarea = document.createElement('textarea');
+            newTextarea.name = 'module_video_iframe[]';
+            newTextarea.textContent = <?php echo json_encode($textarea_default_content); ?>;
+            newTextarea.style.width = '100%';
+            newTextarea.required = true;
+
+            var deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.innerText = 'Delete';
+
+            deleteButton.addEventListener('click', function() {
+                container.remove();
+            });
+
+            container.appendChild(newTextarea);
+            container.appendChild(deleteButton);
+            document.getElementById('video_iframe_fields').appendChild(container);
+        });
+
+        document.querySelectorAll('.remove_video').forEach(button => {
+            button.addEventListener('click', function() {
+                this.parentElement.remove();
+            });
         });
     </script>
     <?php
 }
+
 
 // Display existing modules from the custom table
 function display_elearning_modules() {
@@ -162,26 +194,31 @@ function save_elearning_module() {
         $module_number = sanitize_text_field($_POST['module_number']);
         $module_title = sanitize_text_field($_POST['module_title']);
         $module_introtext = sanitize_textarea_field($_POST['module_introtext']);
-        $allowed_html = array(
-            'iframe' => array(
-                'id'                  => array(),
-                'width'               => array(),
-                'height'              => array(),
-                'src'                 => array(),
-                'class'               => array(),
-                'allowfullscreen'     => array(),
-                'webkitallowfullscreen' => array(),
-                'mozallowfullscreen'  => array(),
-                'allow'               => array(),
-                'referrerpolicy'      => array(),
-                'sandbox'             => array(),
-                'frameborder'         => array(),
-                'title'               => array(),
-            ),
+        $allowed_html = array_merge(
+            wp_kses_allowed_html('post'),
+            array(
+                'iframe' => array(
+                    'id'                  => array(),
+                    'width'               => array(),
+                    'height'              => array(),
+                    'src'                 => array(),
+                    'class'               => array(),
+                    'allowfullscreen'     => array(),
+                    'webkitallowfullscreen' => array(),
+                    'mozallowfullscreen'  => array(),
+                    'allow'               => array(),
+                    'referrerpolicy'      => array(),
+                    'sandbox'             => array(),
+                    'frameborder'         => array(),
+                    'title'               => array(),
+                ),
+            )
         );
+
         $module_video_iframes = array_map(function($iframe) use ($allowed_html) {
             return wp_kses($iframe, $allowed_html);
         }, $_POST['module_video_iframe']);
+
 
         // Handle the thumbnail upload (if applicable)
         $thumbnail_id = null;
@@ -297,6 +334,7 @@ function elearning_edit_module_page() {
     $current_thumbnail = !empty($module->module_thumbnail) ? wp_get_attachment_url($module->module_thumbnail) : '';
     $module_video_iframes = unserialize($module->module_video_iframe);  // Unserialize the video iframes
 
+    global $textarea_default_content;
     ?>
     <div class="wrap">
         <h1>Edit E-Learning Module</h1>
@@ -322,10 +360,10 @@ function elearning_edit_module_page() {
             <textarea id="module_introtext" name="module_introtext" required><?php echo esc_textarea($module->module_introtext); ?></textarea>
 
             <label for="module_video_iframe">Module Video iFrame:</label>
-            <div id="video_iframe_fields">
+            <div id="video_iframe_fields" >
                 <?php foreach ($module_video_iframes as $iframe): ?>
-                    <div class="iframe-field">
-                        <input type="text" name="module_video_iframe[]" value="<?php echo esc_attr($iframe); ?>" required>
+                    <div class="iframe-field" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <textarea type="text" name="module_video_iframe[]" value="<?php echo esc_attr($iframe); ?>" style="width: 100%" required><?php echo $textarea_default_content; ?></textarea>
                         <button type="button" class="remove-iframe">Delete</button>
                     </div>
                 <?php endforeach; ?>
@@ -346,9 +384,16 @@ function elearning_edit_module_page() {
     <script>
         // Add a new video input field
         document.getElementById('add_video').addEventListener('click', function() {
+            var textareaDefaultContent = <?php echo json_encode($textarea_default_content); ?>;
             var newDiv = document.createElement('div');
             newDiv.classList.add('iframe-field');
-            newDiv.innerHTML = '<input type="text" name="module_video_iframe[]" required> <button type="button" class="remove-iframe">Delete</button>';
+            newDiv.style.display = 'flex';
+            newDiv.style.alignItems = 'center';
+            newDiv.style.gap = '10px';
+            newDiv.style.marginBottom = '10px';
+            newDiv.innerHTML = '<textarea type="text" name="module_video_iframe[]" style="width: 100%" required>'
+                + textareaDefaultContent +
+                '</textarea> <button type="button" class="remove-iframe">Delete</button>';
             document.getElementById('video_iframe_fields').appendChild(newDiv);
         });
 
@@ -376,23 +421,27 @@ function update_elearning_module() {
         $module_title = sanitize_text_field($_POST['module_title']);
         $module_introtext = sanitize_textarea_field($_POST['module_introtext']);
 
-        $allowed_html = array(
-            'iframe' => array(
-                'id'                  => array(),
-                'width'               => array(),
-                'height'              => array(),
-                'src'                 => array(),
-                'class'               => array(),
-                'allowfullscreen'     => array(),
-                'webkitallowfullscreen' => array(),
-                'mozallowfullscreen'  => array(),
-                'allow'               => array(),
-                'referrerpolicy'      => array(),
-                'sandbox'             => array(),
-                'frameborder'         => array(),
-                'title'               => array(),
-            ),
+        $allowed_html = array_merge(
+            wp_kses_allowed_html('post'),
+            array(
+                'iframe' => array(
+                    'id'                  => array(),
+                    'width'               => array(),
+                    'height'              => array(),
+                    'src'                 => array(),
+                    'class'               => array(),
+                    'allowfullscreen'     => array(),
+                    'webkitallowfullscreen' => array(),
+                    'mozallowfullscreen'  => array(),
+                    'allow'               => array(),
+                    'referrerpolicy'      => array(),
+                    'sandbox'             => array(),
+                    'frameborder'         => array(),
+                    'title'               => array(),
+                ),
+            )
         );
+
         $module_video_iframes = array_map(function($iframe) use ($allowed_html) {
             return wp_kses($iframe, $allowed_html);
         }, $_POST['module_video_iframe']);
