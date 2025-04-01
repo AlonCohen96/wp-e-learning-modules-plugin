@@ -368,7 +368,7 @@ function elearning_edit_module_page() {
                     </div>
                 <?php endforeach; ?>
             </div>
-            <button type="button" id="add_video">Add Video</button>
+            <button type="button" id="add_video" style="width: 150px; margin-bottom: 20px;>Add Element</button>
 
             <label for="module_thumbnail">Module Thumbnail:</label>
             <?php if ($current_thumbnail): ?>
