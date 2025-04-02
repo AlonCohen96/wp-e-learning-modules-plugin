@@ -359,6 +359,14 @@ function elearning_edit_module_page() {
             <label for="module_introtext">Module Introtext:</label>
             <textarea id="module_introtext" name="module_introtext" required><?php echo esc_textarea($module->module_introtext); ?></textarea>
 
+            <label for="module_thumbnail">Module Thumbnail:</label>
+            <?php if ($current_thumbnail): ?>
+                <div>
+                    <img src="<?php echo esc_url($current_thumbnail); ?>" alt="Current Thumbnail" style="max-width: 200px; height: auto; margin-bottom: 10px;">
+                </div>
+            <?php endif; ?>
+            <input type="file" id="module_thumbnail" name="module_thumbnail">
+
             <label for="module_video_iframe">Module Video iFrame:</label>
             <div id="video_iframe_fields" >
                 <?php foreach ($module_video_iframes as $iframe): ?>
@@ -368,15 +376,7 @@ function elearning_edit_module_page() {
                     </div>
                 <?php endforeach; ?>
             </div>
-            <button type="button" id="add_video" style="width: 150px; margin-bottom: 20px;>Add Element</button>
-
-            <label for="module_thumbnail">Module Thumbnail:</label>
-            <?php if ($current_thumbnail): ?>
-                <div>
-                    <img src="<?php echo esc_url($current_thumbnail); ?>" alt="Current Thumbnail" style="max-width: 200px; height: auto; margin-bottom: 10px;">
-                </div>
-            <?php endif; ?>
-            <input type="file" id="module_thumbnail" name="module_thumbnail">
+            <button type="button" id="add_video" style="width: 150px; margin-bottom: 20px;">Add Element</button>
 
             <input type="submit" name="update_module" value="Save Changes" class="button button-primary" style="width: 250px; margin-bottom: 40px;">
         </form>
@@ -453,25 +453,34 @@ function update_elearning_module() {
             require_once(ABSPATH . 'wp-admin/includes/image.php');
             require_once(ABSPATH . 'wp-admin/includes/media.php');
 
-            $attachment_id = media_handle_upload('module_thumbnail', 0); // No need to associate it with a post
+            $attachment_id = media_handle_upload('module_thumbnail', 0);
             if (!is_wp_error($attachment_id)) {
-                $thumbnail_id = $attachment_id; // Save attachment ID for the thumbnail
+                $thumbnail_id = $attachment_id;
             }
+        }
+
+        // Prepare data and formats for update
+        $data = array(
+            'module_number'   => $module_number,
+            'module_title'    => $module_title,
+            'module_introtext' => $module_introtext,
+            'module_video_iframe' => serialize($module_video_iframes),
+        );
+        $formats = array('%s', '%s', '%s', '%s');
+
+        // Only update thumbnail if a new one is uploaded
+        if ($thumbnail_id !== null) {
+            $data['module_thumbnail'] = $thumbnail_id;
+            $formats[] = '%d';
         }
 
         // Update the module in the custom table
         $result = $wpdb->update(
             $table_name,
-            array(
-                'module_number'   => $module_number,
-                'module_title'    => $module_title,
-                'module_introtext' => $module_introtext,
-                'module_video_iframe'     => serialize($module_video_iframes), // Save array as serialized string
-                'module_thumbnail' => $thumbnail_id, // Store the thumbnail attachment ID
-            ),
+            $data,
             array('id' => $module_id),
-            array('%s', '%s', '%s', '%s', '%d'),
-            array('%d')  // Where clause
+            $formats,
+            array('%d')
         );
 
         // Check if the update was successful
