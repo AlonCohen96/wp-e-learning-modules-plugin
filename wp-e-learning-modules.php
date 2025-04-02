@@ -371,7 +371,7 @@ function elearning_edit_module_page() {
             <div id="video_iframe_fields" >
                 <?php foreach ($module_video_iframes as $iframe): ?>
                     <div class="iframe-field" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <textarea type="text" name="module_video_iframe[]" value="<?php echo esc_attr($iframe); ?>" style="width: 100%" required><?php echo $textarea_default_content; ?></textarea>
+                        <textarea name="module_video_iframe[]" style="width: 100%" required><?php echo esc_attr($iframe); ?></textarea>
                         <button type="button" class="remove-iframe">Delete</button>
                     </div>
                 <?php endforeach; ?>
