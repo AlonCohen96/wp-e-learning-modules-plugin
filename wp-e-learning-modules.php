@@ -173,20 +173,44 @@ function display_elearning_modules() {
         foreach ($modules as $module) {
             $edit_url = admin_url('admin.php?page=edit-elearning-module&module_id=' . $module->id);
             $delete_url = wp_nonce_url(admin_url('admin.php?page=elearning-modules&delete_module=' . $module->id), 'delete_elearning_module');
+            $module_title_escaped = esc_attr($module->module_title); // Escape for JS attribute
 
             echo '<tr>';
             echo '<td>' . esc_html($module->module_number) . '</td>';
             echo '<td>' . esc_html($module->module_title) . '</td>';
             echo '<td>' . esc_html($module->module_introtext) . '</td>';
-            echo '<td><a href="' . esc_url($edit_url) . '">Edit</a> | <a href="' . esc_url($delete_url) . '">Delete</a></td>';
+            echo '<td>
+                    <a href="' . esc_url($edit_url) . '">Edit</a> | 
+                    <a href="' . esc_url($delete_url) . '" class="delete-module-link" data-title="' . $module_title_escaped . '">Delete</a>
+                  </td>';
             echo '</tr>';
         }
         echo '</tbody>';
         echo '</table>';
+
+        // JS confirmation with module title
+        echo <<<HTML
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    const deleteLinks = document.querySelectorAll('.delete-module-link');
+                    deleteLinks.forEach(link => {
+                        link.addEventListener('click', function (e) {
+                            const title = link.getAttribute('data-title');
+                            const confirmDelete = confirm('Are you sure you want to delete Module "' + title + '" ? This action cannot be undone.');
+                            if (!confirmDelete) {
+                                e.preventDefault();
+                            }
+                        });
+                    });
+                });
+            </script>
+        HTML;
     } else {
         echo '<p>No modules found.</p>';
     }
 }
+
+
 
 function save_elearning_module() {
     if (isset($_POST['submit_module']) && check_admin_referer('save_elearning_module', 'elearning_nonce')) {
